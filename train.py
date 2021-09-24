@@ -59,7 +59,7 @@ img_width, img_height = 150, 150
 
 top_model_weights_path = 'model.pth'
 data_dir = 'data'
-epochs = 3
+epochs = 10
 batch_size = 10
 
 data_transforms = {
