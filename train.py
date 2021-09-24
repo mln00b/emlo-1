@@ -42,12 +42,13 @@ import numpy as np
 import sys
 import os
 import copy
+import csv
 
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils import data
 import torchvision
+from torch.utils import data
 from torchvision import datasets, models, transforms
 
 pathname = os.path.dirname(sys.argv[0])
@@ -56,19 +57,19 @@ path = os.path.abspath(pathname)
 # dimensions of our images.
 img_width, img_height = 150, 150
 
-top_model_weights_path = 'model.h5'
+top_model_weights_path = 'model.pth'
 data_dir = 'data'
-epochs = 10
+epochs = 3
 batch_size = 10
 
 data_transforms = {
     'train': transforms.Compose([
         transforms.Resize((img_height, img_width)),
-        transforms.ToTensor(),
+        transforms.ToTensor()
     ]),
     'validation': transforms.Compose([
         transforms.Resize((img_height, img_width)),
-        transforms.ToTensor(),
+        transforms.ToTensor()
     ]),
 }
 
@@ -99,12 +100,14 @@ def train_model(model, criterion, optimizer, scheduler=None, num_epochs=epochs):
         "train_acc": [],
         "validation_acc": [],
         "train_loss": [],
-        "validation_loss": []
+        "validation_loss": [],
+        "validation_acc_per_class": []
     }
 
     for epoch in range(num_epochs):
         print('Epoch {}/{}'.format(epoch, num_epochs - 1))
         print('-' * 10)
+        history["epochs"].append(epoch)
 
         # Each epoch has a training and validation phase
         for phase in ['train', 'validation']:
@@ -115,6 +118,8 @@ def train_model(model, criterion, optimizer, scheduler=None, num_epochs=epochs):
 
             running_loss = 0.0
             running_corrects = 0
+            correct_per_class = [0] * 2
+            total_per_class = [0] * 2
 
             # Iterate over data.
             for inputs, labels in dataloaders[phase]:
@@ -139,6 +144,10 @@ def train_model(model, criterion, optimizer, scheduler=None, num_epochs=epochs):
                 # statistics
                 running_loss += loss.item() * inputs.size(0)
                 running_corrects += torch.sum(preds == labels.data)
+                for c in range(2):
+                  correct_per_class[c] += ((preds == labels.data) * (labels.data == c)).sum()
+                  total_per_class[c] += (labels.data == c).sum()
+
             if phase == 'train':
                 if scheduler: scheduler.step()
 
@@ -146,11 +155,15 @@ def train_model(model, criterion, optimizer, scheduler=None, num_epochs=epochs):
             epoch_acc = running_corrects.double() / dataset_sizes[phase]
 
             if phase == "train":
-                history["train_acc"].append(epoch_acc)
+                history["train_acc"].append(epoch_acc.cpu().numpy())
                 history["train_loss"].append(epoch_loss)
             elif phase == "validation":
-                history["validation_acc"].append(epoch_acc)
+                history["validation_acc"].append(epoch_acc.cpu().numpy())
                 history["validation_loss"].append(epoch_loss)
+                val_acc_per_class = []
+                for c in range(2):
+                  val_acc_per_class.append((correct_per_class[c]/total_per_class[c]).cpu().numpy())
+                history["validation_acc_per_class"].append(val_acc_per_class)
 
             print('{} Loss: {:.4f} Acc: {:.4f}'.format(
                 phase, epoch_loss, epoch_acc))
@@ -189,5 +202,18 @@ def train_top_model():
 
     history, model = train_model(model, criterion, optimizer)
     print(history)
+    with open("Metrics.csv", "w") as f:
+      cw = csv.writer(f)
+      cw.writerow(["epoch", "accuracy", "loss", "val_accuracy", "val_loss", "class_1_val_acc", "class_2_val_acc"])
+      for i in range(epochs):
+        cw.writerow([
+          history["epochs"][i],
+          history["train_acc"][i],history["train_loss"][i],
+          history["validation_acc"][i],history["validation_loss"][i],
+          history["validation_acc"][i],history["validation_loss"][i],
+          history["validation_acc_per_class"][i][0],history["validation_acc_per_class"][i][0],
+        ])
+    torch.save(model.state_dict(), top_model_weights_path)
+    print("Model saved")
      
 train_top_model()
