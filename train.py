@@ -185,7 +185,7 @@ def train_top_model():
 
     criterion = nn.CrossEntropyLoss()
 
-    optimizer = optim.RMSprop(model.parameters(), lr=0.001, momentum=0.9)
+    optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
 
     history, model = train_model(model, criterion, optimizer)
     print(history)
